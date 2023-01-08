@@ -2,7 +2,7 @@ import unittest
 
 import yt_dlp.utils
 
-import constants
+from . import constants
 
 
 class TestSampleVideos(unittest.TestCase):

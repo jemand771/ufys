@@ -1,9 +1,9 @@
 import unittest
 import urllib.request
 
-import worker
-from model import UfysRequest
-from test import constants
+from .. import worker
+from ..model import UfysRequest
+from . import constants
 
 
 class TestWorker(unittest.TestCase):
