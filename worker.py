@@ -38,7 +38,7 @@ class ConfigStore:
 
 class Worker:
     config: ConfigStore
-    minio: "minio.Minio" = None
+    minio: "minio.Minio | None" = None
 
     def __init__(self, config: ConfigStore = None):
         self.config = config or ConfigStore()
@@ -50,24 +50,30 @@ class Worker:
                 secure=self.config.MINIO_SECURE
             )
             if not self.minio.bucket_exists(self.config.MINIO_BUCKET):
-                self.minio.make_bucket(self.config.MINIO_BUCKET)
+                print(f"warning: bucket {config.MINIO_BUCKET} doesn't exist")
+                self.minio = None
+        except TypeError:
+            print("warning: minio not connected (configuration error)")
         except AttributeError:
-            print("warning: minio not connected (some bucket thing idk)")
+            print("warning: minio not connected (bucket error)")
         except MaxRetryError:
             print("warning: minio not connected (timeout)")
-        else:
-            self.minio.set_bucket_lifecycle(
-                self.config.MINIO_BUCKET,
-                minio.lifecycleconfig.LifecycleConfig(
-                    [
-                        minio.lifecycleconfig.Rule(
-                            status=minio.commonconfig.ENABLED,
-                            rule_filter=minio.commonconfig.Filter(prefix=""),
-                            expiration=minio.lifecycleconfig.Expiration(days=1)
-                        )
-                    ]
-                )
-            )
+        # TODO set access policy
+        # setting up anonymous access looks painful (json string), and only partially auto-configuring the bucket
+        # might yield unexpected results. I'll either re-add this or remove it entirely
+        # else:
+        #     self.minio.set_bucket_lifecycle(
+        #         self.config.MINIO_BUCKET,
+        #         minio.lifecycleconfig.LifecycleConfig(
+        #             [
+        #                 minio.lifecycleconfig.Rule(
+        #                     status=minio.commonconfig.ENABLED,
+        #                     rule_filter=minio.commonconfig.Filter(prefix=""),
+        #                     expiration=minio.lifecycleconfig.Expiration(days=1)
+        #                 )
+        #             ]
+        #         )
+        #     )
         self.ytdl = YoutubeDL()
 
     def handle_request(self, req: UfysRequest) -> UfysResponse:
