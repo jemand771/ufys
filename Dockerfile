@@ -16,4 +16,4 @@ COPY *.py ./
 
 EXPOSE 80
 
-CMD exec gunicorn --bind 0.0.0.0:80 main:APP --threads 1 --workers 1
+CMD exec gunicorn --bind 0.0.0.0:80 main:APP --threads 1 --workers 1 --access-logfile -
