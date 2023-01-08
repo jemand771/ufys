@@ -44,8 +44,6 @@ def handle_minio_not_connected(ex):
     return jsonify(UfysError(code="minio-error")), 500
 
 
-# TODO docker+deployment stuff
-
 if __name__ == '__main__':
     # this server is for development only, do not use in production
     APP.run(host="0.0.0.0", port=5000, debug=True, threaded=True)
