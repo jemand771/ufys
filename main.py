@@ -44,7 +44,6 @@ def handle_minio_not_connected(ex):
     return jsonify(UfysError(code="minio-error")), 500
 
 
-# TODO tests
 # TODO docker+deployment stuff
 
 if __name__ == '__main__':
