@@ -29,6 +29,8 @@ jobs:
         run: pytest test
   docker-build:
     runs-on: ubuntu-latest
+    needs:
+      - test
     steps:
       - uses: jemand771/docker-build-action@main
         with:
