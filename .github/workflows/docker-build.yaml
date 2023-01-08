@@ -12,6 +12,8 @@ jobs:
         image: bitnami/minio
         ports:
           - 9080:9000
+        env:
+          MINIO_DEFAULT_BUCKETS: test
     steps:
       - name: Checkout
         uses: actions/checkout@v3
