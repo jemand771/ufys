@@ -1,9 +1,10 @@
 import unittest
-import urllib.request
 
+import requests
+
+from . import constants
 from .. import worker
 from ..model import UfysRequest
-from . import constants
 
 
 class TestWorker(unittest.TestCase):
@@ -14,19 +15,21 @@ class TestWorker(unittest.TestCase):
         self.assertEqual(resp.creator, "dracosweeney")
         self.assertEqual(resp.title, "Gotta make sure the memory card is in place 💀 ")
         self.assertEqual(resp.reuploaded, False)
-        self.assertEqual(resp.width, 576)
-        self.assertEqual(resp.height, 1024)
-        with urllib.request.urlopen(resp.video_url) as http:
-            self.assertEqual(http.status // 100, 2)
+        self.assertEqual(resp.width, 720)
+        self.assertEqual(resp.height, 1280)
+        r = requests.get(resp.video_url)
+        r.raise_for_status()
 
     def test_minio_reupload(self):
-        wk = worker.Worker(worker.ConfigStore(
-            MINIO_BUCKET="test",
-            MINIO_ENDPOINT="localhost:9080",
-            MINIO_SECURE=False,
-            MINIO_ACCESS_KEY="minioadmin",
-            MINIO_SECRET_KEY="minioadmin"
-        ))
+        wk = worker.Worker(
+            worker.ConfigStore(
+                MINIO_BUCKET="test",
+                MINIO_ENDPOINT="localhost:9080",
+                MINIO_SECURE=False,
+                MINIO_ACCESS_KEY="minioadmin",
+                MINIO_SECRET_KEY="minioadmin"
+            )
+        )
         wk.handle_request(UfysRequest(url=constants.video_needs_reupload))
         objects = wk.minio.list_objects(wk.config.MINIO_BUCKET)
         self.assertEqual(len(list(objects)), 1)
