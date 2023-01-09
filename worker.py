@@ -4,16 +4,18 @@ import os
 import pathlib
 from dataclasses import dataclass
 from tempfile import TemporaryDirectory
-from typing import Any
 
+# noinspection PyPackageRequirements
+import ffmpeg
 import minio
 import minio.commonconfig
 import minio.lifecycleconfig
+import requests as requests
 from urllib3.exceptions import MaxRetryError
 from yt_dlp import YoutubeDL
 
 import util
-from model import MinioNotConnected, UfysRequest, UfysResponse, UfysResponseVideoMetadata
+from model import MinioNotConnected, UfysError, UfysRequest, UfysResponse, UfysResponseVideoMetadata
 
 
 @dataclass
@@ -76,28 +78,55 @@ class Worker:
         #     )
         self.ytdl = YoutubeDL()
 
-    def handle_request(self, req: UfysRequest) -> UfysResponse:
+    def handle_request(self, req: UfysRequest) -> UfysResponse | UfysError:
         info = self.ytdl.extract_info(req.url, download=False)
-        meta = dataclasses.asdict(
+        type_ = info.get("_type", "video")
+        if type_ == "video":
+            return self.handle_video(info, req)
+        if type_ == "playlist":
+            entries = info.get("entries", [])
+            if not entries:
+                return UfysError("empty-playlist", "no video found in playlist")
+            if direct_url := entries[0].get("url"):
+                return self.handle_direct_url(direct_url, info)
+            if orig_url := entries[0].get("original_url"):
+                req.url = orig_url
+                return self.handle_request(req)
+            return UfysError("unknown-playlist", message="playlist detected, but unable to process")
+        return UfysError(code="unknown-type", message="unknown media type")
+
+    @staticmethod
+    def meta_from_info(info):
+        return dataclasses.asdict(
             UfysResponseVideoMetadata(
                 title=info.get("title"),
                 creator=info.get("uploader"),
             )
         )
-        if fmt := self.get_best_format(info["formats"]):
-            return UfysResponse(
-                **meta,
-                width=fmt["width"],
-                height=fmt["height"],
-                video_url=fmt.get("url"),
-            )
-        url, download = self.reupload(req.url, req.hash)
+
+    def handle_video(self, info, req: UfysRequest):
+        if direct_url := info.get("url"):
+            return self.handle_direct_url(direct_url, info)
+
+        return self.reupload(req.url, req.hash)
+
+    def handle_direct_url(self, url: str, info):
+        if not (width := info.get("width")) or not (height := info.get("height")):
+            # we don't know the dimensions
+            with TemporaryDirectory() as _tmp:
+                tmp = pathlib.Path(_tmp)
+                file = tmp / "video"
+                with requests.get(url, stream=True) as r:
+                    r.raise_for_status()
+                    with open(file, "wb") as f:
+                        for chunk in r.iter_content(chunk_size=8 * 1024):
+                            f.write(chunk)
+                width, height = self.find_dimensions(file)
         return UfysResponse(
-            **meta,
+            **self.meta_from_info(info),
             video_url=url,
-            width=download["width"],
-            height=download["height"],
-            reuploaded=True,
+            width=width,
+            height=height
         )
 
     def reupload(self, url: str, hash_: str):
@@ -117,37 +146,19 @@ class Worker:
                 file_path=str(path),
                 content_type=mime
             )
+            if not (width := downloads[0].get("width")) or not (height := downloads[0].get("height")):
+                width, height = self.find_dimensions(path)
         # TODO this will probably be wrong when _not_ running in dev
-        return result.location, downloads[0]
-
-    def get_best_format(self, formats: list[dict[str, Any]]):
-        embeddable_formats = [
-            # welcome back to "pycharm's linter and autoformatter are having an argument".
-            # pycharm, bringing you nonsensical warnings AND ugly code since 2010
-            fmt for fmt in formats if
-            self.is_valid_tbr(fmt.get("tbr"))
-            and self.codec_okay(fmt.get("acodec"))
-            and self.codec_okay(fmt.get("vcodec"))
-        ]
-        if not embeddable_formats:
-            return None
-        return max(embeddable_formats, key=lambda fmt: float(fmt["tbr"]))
+        return UfysResponse(
+            **self.meta_from_info(info),
+            video_url=result.location,
+            width=width,
+            height=height,
+            reuploaded=True,
+        )
 
     @staticmethod
-    def codec_okay(codec: str) -> bool:
-        if not codec:
-            return False
-        if codec.lower() == "none":
-            return False
-        return True
-
-    @staticmethod
-    def is_valid_tbr(string: str) -> bool:
-        if not string:
-            return False
-        try:
-            if float(string) < 1:
-                return False
-        except ValueError:
-            return False
-        return True
+    def find_dimensions(path: pathlib.Path):
+        streams = ffmpeg.probe(path, select_streams="v").get("streams", [])
+        assert len(streams) == 1
+        return streams[0].get("width"), streams[0].get("height")
