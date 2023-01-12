@@ -46,4 +46,4 @@ def handle_minio_not_connected(ex):
 
 if __name__ == '__main__':
     # this server is for development only, do not use in production
-    APP.run(host="0.0.0.0", port=5000, debug=True, threaded=True)
+    APP.run(host="0.0.0.0", port=5004, debug=True, threaded=True)
