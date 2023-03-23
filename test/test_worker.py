@@ -15,8 +15,8 @@ class TestWorker(unittest.TestCase):
         self.assertEqual(resp.creator, "dracosweeney")
         self.assertEqual(resp.title, "Gotta make sure the memory card is in place 💀 ")
         self.assertEqual(resp.reuploaded, False)
-        self.assertEqual(resp.width, 720)
-        self.assertEqual(resp.height, 1280)
+        self.assertEqual(resp.width, 576)
+        self.assertEqual(resp.height, 1024)
         r = requests.get(resp.video_url)
         r.raise_for_status()
 
