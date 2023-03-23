@@ -11,6 +11,7 @@ import minio
 import minio.commonconfig
 import minio.lifecycleconfig
 import requests as requests
+import yt_dlp.utils
 from urllib3.exceptions import MaxRetryError
 from yt_dlp import YoutubeDL
 
@@ -109,13 +110,13 @@ class Worker:
             format=url_format_selector
         ))
         # downloads should just use the default settings
-        self.ytdl_dl = YoutubeDL()
+        self.ytdl_raw = YoutubeDL()
 
     def handle_request(self, req: UfysRequest) -> UfysResponse | UfysError:
-        info = self.ytdl_url.extract_info(req.url, download=False)
+        info = self.ytdl_raw.extract_info(req.url, download=False)
         type_ = info.get("_type", "video")
         if type_ == "video":
-            return self.handle_video(info, req)
+            return self.handle_video(req)
         if type_ == "playlist":
             entries = info.get("entries", [])
             if not entries:
@@ -137,11 +138,14 @@ class Worker:
             )
         )
 
-    def handle_video(self, info, req: UfysRequest):
-        if direct_url := info.get("url"):
-            return self.handle_direct_url(direct_url, info)
-
-        return self.reupload(req.url, req.hash)
+    def handle_video(self, req: UfysRequest):
+        try:
+            info = self.ytdl_url.extract_info(req.url, download=False)
+            if direct_url := info.get("url"):
+                raise yt_dlp.utils.DownloadError("extractor returned no url")
+        except yt_dlp.utils.DownloadError:
+            return self.reupload(req.url, req.hash)
+        return self.handle_direct_url(direct_url, info)
 
     def handle_direct_url(self, url: str, info):
         if not (width := info.get("width")) or not (height := info.get("height")):
@@ -168,7 +172,7 @@ class Worker:
             raise MinioNotConnected()
         with TemporaryDirectory() as tmp:
             with util.chdir(tmp):
-                info = self.ytdl_dl.extract_info(url)
+                info = self.ytdl_raw.extract_info(url)
             downloads = info.get("requested_downloads", [])
             assert len(downloads) == 1
             path = pathlib.Path(downloads[0]["filepath"])
