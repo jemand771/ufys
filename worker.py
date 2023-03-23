@@ -141,7 +141,7 @@ class Worker:
     def handle_video(self, req: UfysRequest):
         try:
             info = self.ytdl_url.extract_info(req.url, download=False)
-            if direct_url := info.get("url"):
+            if not (direct_url := info.get("url")):
                 raise yt_dlp.utils.DownloadError("extractor returned no url")
         except yt_dlp.utils.DownloadError:
             return self.reupload(req.url, req.hash)
