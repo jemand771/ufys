@@ -50,6 +50,7 @@ def url_format_selector(ctx):
                 continue
             if fmt["ext"] != "mp4":
                 continue
+            # TODO fall back if this is _too_ bad
             yield dict(
                 format_id=fmt["format_id"],
                 ext=fmt["ext"],
@@ -104,6 +105,7 @@ class Worker:
         #     )
         # try to extract using custom format extractor
         self.ytdl_url = YoutubeDL(dict(
+            # TODO these should be configurable... per request? (e.g. exclude-h265 param)
             format=url_format_selector
         ))
         # downloads should just use the default settings
