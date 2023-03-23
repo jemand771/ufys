@@ -38,6 +38,28 @@ class ConfigStore:
                 print(f"warning: ConfigStore.{key} is None")
 
 
+def url_format_selector(ctx):
+    # sort best to worst
+    formats = ctx.get("formats")[::-1]
+    # we're looking for h264 mp4 with audio
+    for fmt in formats:
+        if fmt["acodec"] == "none":
+            continue
+        if fmt["vcodec"] != "h264":
+            continue
+        if fmt["ext"] != "mp4":
+            continue
+        yield dict(
+            format_id=fmt["format_id"],
+            ext=fmt["ext"],
+            requested_formats=[fmt],
+            protocol=fmt["protocol"],
+            url=fmt["url"]
+        )
+        # one is enough :)
+        return
+
+
 class Worker:
     config: ConfigStore
     minio: "minio.Minio | None" = None
@@ -76,10 +98,15 @@ class Worker:
         #             ]
         #         )
         #     )
-        self.ytdl = YoutubeDL()
+        # try to extract using custom format extractor
+        self.ytdl_url = YoutubeDL(dict(
+            format=url_format_selector
+        ))
+        # downloads should just use the default settings
+        self.ytdl_dl = YoutubeDL()
 
     def handle_request(self, req: UfysRequest) -> UfysResponse | UfysError:
-        info = self.ytdl.extract_info(req.url, download=False)
+        info = self.ytdl_url.extract_info(req.url, download=False)
         type_ = info.get("_type", "video")
         if type_ == "video":
             return self.handle_video(info, req)
@@ -135,7 +162,7 @@ class Worker:
             raise MinioNotConnected()
         with TemporaryDirectory() as tmp:
             with util.chdir(tmp):
-                info = self.ytdl.extract_info(url)
+                info = self.ytdl_dl.extract_info(url)
             downloads = info.get("requested_downloads", [])
             assert len(downloads) == 1
             path = pathlib.Path(downloads[0]["filepath"])
