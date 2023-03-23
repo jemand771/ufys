@@ -43,21 +43,25 @@ def url_format_selector(ctx):
     formats = ctx.get("formats")[::-1]
     # we're looking for h264 mp4 with audio
     for fmt in formats:
-        if fmt["acodec"] == "none":
+        try:
+            if fmt["acodec"] == "none":
+                continue
+            if fmt["vcodec"] != "h264":
+                continue
+            if fmt["ext"] != "mp4":
+                continue
+            yield dict(
+                format_id=fmt["format_id"],
+                ext=fmt["ext"],
+                requested_formats=[fmt],
+                protocol=fmt["protocol"],
+                url=fmt["url"]
+            )
+            # one is enough :)
+            return
+        except KeyError:
+            # incomplete info -> we probably didn't want this anyway
             continue
-        if fmt["vcodec"] != "h264":
-            continue
-        if fmt["ext"] != "mp4":
-            continue
-        yield dict(
-            format_id=fmt["format_id"],
-            ext=fmt["ext"],
-            requested_formats=[fmt],
-            protocol=fmt["protocol"],
-            url=fmt["url"]
-        )
-        # one is enough :)
-        return
 
 
 class Worker:
