@@ -185,14 +185,18 @@ class Worker:
             )
             if not (width := downloads[0].get("width")) or not (height := downloads[0].get("height")):
                 width, height = self.find_dimensions(path)
-        # TODO this will probably be wrong when _not_ running in dev
+        location = result.location or self.get_location(result.object_name)
         return UfysResponse(
             **self.meta_from_info(info),
-            video_url=result.location,
+            video_url=location,
             width=width,
             height=height,
             reuploaded=True,
         )
+
+    def get_location(self, object_name):
+        protocol = "https" if self.config.MINIO_SECURE else "http"
+        return f"{protocol}://{self.config.MINIO_ENDPOINT}/{self.config.MINIO_BUCKET}/{object_name}"
 
     @staticmethod
     def find_dimensions(path: pathlib.Path):
