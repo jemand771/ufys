@@ -19,6 +19,11 @@ import util
 from model import MinioNotConnected, UfysError, UfysRequest, UfysResponse, UfysResponseVideoMetadata
 
 
+YTDL_OPTS = dict(
+    progress_with_newline=True,
+)
+
+
 @dataclass
 class ConfigStore:
     MINIO_ACCESS_KEY: str = None
@@ -106,11 +111,12 @@ class Worker:
         #     )
         # try to extract using custom format extractor
         self.ytdl_url = YoutubeDL(dict(
+            **YTDL_OPTS,
             # TODO these should be configurable... per request? (e.g. exclude-h265 param)
-            format=url_format_selector
+            format=url_format_selector,
         ))
         # downloads should just use the default settings
-        self.ytdl_raw = YoutubeDL()
+        self.ytdl_raw = YoutubeDL(YTDL_OPTS)
         self.session = requests.Session()
         self.session.headers.update({"User-Agent": "ufys/0.0.0 (https://github.com/jemand771/ufys)"})
 
