@@ -111,6 +111,8 @@ class Worker:
         ))
         # downloads should just use the default settings
         self.ytdl_raw = YoutubeDL()
+        self.session = requests.Session()
+        self.session.headers.update({"User-Agent": "ufys/0.0.0 (https://github.com/jemand771/ufys)"})
 
     def handle_request(self, req: UfysRequest) -> UfysResponse | UfysError:
         info = self.ytdl_raw.extract_info(req.url, download=False)
@@ -150,15 +152,7 @@ class Worker:
     def handle_direct_url(self, url: str, info):
         if not (width := info.get("width")) or not (height := info.get("height")):
             # we don't know the dimensions
-            with TemporaryDirectory() as _tmp:
-                tmp = pathlib.Path(_tmp)
-                file = tmp / "video"
-                with requests.get(url, stream=True) as r:
-                    r.raise_for_status()
-                    with open(file, "wb") as f:
-                        for chunk in r.iter_content(chunk_size=8 * 1024):
-                            f.write(chunk)
-                width, height = self.find_dimensions(file)
+            width, height = self.find_dimensions_from_url(url)
         return UfysResponse(
             **self.meta_from_info(info),
             video_url=url,
@@ -184,7 +178,7 @@ class Worker:
                 content_type=mime
             )
             if not (width := downloads[0].get("width")) or not (height := downloads[0].get("height")):
-                width, height = self.find_dimensions(path)
+                width, height = self.find_dimensions_from_file(path)
         location = result.location or self.get_location(result.object_name)
         return UfysResponse(
             **self.meta_from_info(info),
@@ -198,8 +192,19 @@ class Worker:
         protocol = "https" if self.config.MINIO_SECURE else "http"
         return f"{protocol}://{self.config.MINIO_ENDPOINT}/{self.config.MINIO_BUCKET}/{object_name}"
 
+    def find_dimensions_from_url(self, url: str):
+        with TemporaryDirectory() as _tmp:
+            tmp = pathlib.Path(_tmp)
+            file = tmp / "video"
+            with self.session.get(url, stream=True) as r:
+                r.raise_for_status()
+                with open(file, "wb") as f:
+                    for chunk in r.iter_content(chunk_size=8 * 1024):
+                        f.write(chunk)
+            return self.find_dimensions_from_file(file)
+
     @staticmethod
-    def find_dimensions(path: pathlib.Path):
+    def find_dimensions_from_file(path: pathlib.Path):
         streams = ffmpeg.probe(path, select_streams="v").get("streams", [])
         assert len(streams) == 1
         return streams[0].get("width"), streams[0].get("height")
