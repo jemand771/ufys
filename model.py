@@ -21,6 +21,7 @@ class UfysRequest:
 class UfysResponseVideoMetadata:
     title: str | None
     creator: str | None
+    site: str | None
 
 
 @dataclass
