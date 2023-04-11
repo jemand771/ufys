@@ -143,7 +143,7 @@ class Worker:
             UfysResponseVideoMetadata(
                 title=info.get("title"),
                 creator=info.get("uploader"),
-                site=extractor if (extractor := info.get("extractor")) != "generic" else None,
+                site=extractor if (extractor := info.get("extractor_key")) != "Generic" else None,
             )
         )
 
