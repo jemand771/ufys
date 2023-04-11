@@ -1,5 +1,5 @@
-ffmpeg-python
-flask
-minio
-requests
-yt-dlp
+ffmpeg-python==0.2.0
+flask==2.2.3
+minio==7.1.14
+requests==2.28.2
+yt-dlp==2023.3.4
