@@ -12,8 +12,8 @@ class TestWorker(unittest.TestCase):
     def test_direct_extraction(self):
         wk = worker.Worker()
         resp = wk.handle_request(UfysRequest(url=constants.video_direct_linkable))
-        self.assertEqual(resp.creator, "dracosweeney")
-        self.assertEqual(resp.title, "Gotta make sure the memory card is in place 💀 ")
+        self.assertEqual(resp.creator, "zentonte")
+        self.assertEqual(resp.title, "#palinka ")
         self.assertEqual(resp.reuploaded, False)
         self.assertEqual(resp.width, 576)
         self.assertEqual(resp.height, 1024)
