@@ -19,7 +19,6 @@ import telemetry
 import util
 from model import MinioNotConnected, UfysError, UfysRequest, UfysResponse, UfysResponseVideoMetadata
 
-
 YTDL_OPTS = dict(
     progress_with_newline=True,
 )
@@ -111,11 +110,13 @@ class Worker:
         #         )
         #     )
         # try to extract using custom format extractor
-        self.ytdl_url = YoutubeDL(dict(
-            **YTDL_OPTS,
-            # TODO these should be configurable... per request? (e.g. exclude-h265 param)
-            format=url_format_selector,
-        ))
+        self.ytdl_url = YoutubeDL(
+            dict(
+                **YTDL_OPTS,
+                # TODO these should be configurable... per request? (e.g. exclude-h265 param)
+                format=url_format_selector,
+            )
+        )
         self.ytdl_url.extract_info = telemetry.trace_function(self.ytdl_url.extract_info)
         # downloads should just use the default settings
         self.ytdl_raw = YoutubeDL(YTDL_OPTS)
