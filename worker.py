@@ -15,6 +15,7 @@ import yt_dlp.utils
 from urllib3.exceptions import MaxRetryError
 from yt_dlp import YoutubeDL
 
+import telemetry
 import util
 from model import MinioNotConnected, UfysError, UfysRequest, UfysResponse, UfysResponseVideoMetadata
 
@@ -115,11 +116,14 @@ class Worker:
             # TODO these should be configurable... per request? (e.g. exclude-h265 param)
             format=url_format_selector,
         ))
+        self.ytdl_url.extract_info = telemetry.trace_function(self.ytdl_url.extract_info)
         # downloads should just use the default settings
         self.ytdl_raw = YoutubeDL(YTDL_OPTS)
+        self.ytdl_raw.extract_info = telemetry.trace_function(self.ytdl_raw.extract_info)
         self.session = requests.Session()
         self.session.headers.update({"User-Agent": "ufys/0.0.0 (https://github.com/jemand771/ufys)"})
 
+    @telemetry.trace_function
     def handle_request(self, req: UfysRequest) -> UfysResponse | UfysError:
         info = self.ytdl_raw.extract_info(req.url, download=False)
         type_ = info.get("_type", "video")
@@ -147,6 +151,7 @@ class Worker:
             )
         )
 
+    @telemetry.trace_function
     def handle_video(self, req: UfysRequest):
         try:
             info = self.ytdl_url.extract_info(req.url, download=False)
@@ -156,6 +161,7 @@ class Worker:
             return self.reupload(req.url, req.hash)
         return self.handle_direct_url(direct_url, info)
 
+    @telemetry.trace_function
     def handle_direct_url(self, url: str, info):
         if not (width := info.get("width")) or not (height := info.get("height")):
             # we don't know the dimensions
@@ -167,6 +173,7 @@ class Worker:
             height=height
         )
 
+    @telemetry.trace_function
     def reupload(self, url: str, hash_: str):
         # TODO size limit - pass in via request param? (support for external overrides)
         if self.minio is None:
@@ -199,6 +206,7 @@ class Worker:
         protocol = "https" if self.config.MINIO_SECURE else "http"
         return f"{protocol}://{self.config.MINIO_ENDPOINT}/{self.config.MINIO_BUCKET}/{object_name}"
 
+    @telemetry.trace_function
     def find_dimensions_from_url(self, url: str):
         with TemporaryDirectory() as _tmp:
             tmp = pathlib.Path(_tmp)
@@ -211,6 +219,7 @@ class Worker:
             return self.find_dimensions_from_file(file)
 
     @staticmethod
+    @telemetry.trace_function
     def find_dimensions_from_file(path: pathlib.Path):
         streams = ffmpeg.probe(path, select_streams="v").get("streams", [])
         assert len(streams) == 1

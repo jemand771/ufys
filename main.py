@@ -3,13 +3,20 @@ import dataclasses
 import yt_dlp
 from flask import Flask, request
 from flask.json import JSONEncoder, jsonify
+from opentelemetry.instrumentation.flask import FlaskInstrumentor
+from opentelemetry.instrumentation.requests import RequestsInstrumentor
 
+import telemetry
 import util
 import worker
 from model import MinioNotConnected, UfysError, UfysRequest
 
 APP = Flask(__name__)
 WORKER = worker.Worker(worker.ConfigStore.from_env())
+
+telemetry.init()
+FlaskInstrumentor().instrument_app(APP)
+RequestsInstrumentor().instrument()
 
 
 class ResponseEncoder(JSONEncoder):
