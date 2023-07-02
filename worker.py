@@ -2,6 +2,7 @@ import dataclasses
 import mimetypes
 import os
 import pathlib
+import urllib.parse
 from dataclasses import dataclass
 from tempfile import TemporaryDirectory
 
@@ -12,6 +13,7 @@ import minio.commonconfig
 import minio.lifecycleconfig
 import requests as requests
 import yt_dlp.utils
+from bs4 import BeautifulSoup
 from urllib3.exceptions import MaxRetryError
 from yt_dlp import YoutubeDL
 
@@ -31,6 +33,7 @@ class ConfigStore:
     MINIO_ENDPOINT: str = None
     MINIO_BUCKET: str = None
     MINIO_SECURE: bool = True
+    AAAS_ENDPOINT: str = None
 
     @classmethod
     def from_env(cls):
@@ -126,6 +129,14 @@ class Worker:
 
     @telemetry.trace_function
     def handle_request(self, req: UfysRequest) -> UfysResponse | UfysError:
+        # TODO this should probably be a fancy modular oop thing instead of a giant switch case
+        parts = urllib.parse.urlparse(req.url)
+        if parts.hostname == "asciinema.org":
+            id_, = parts.path.removeprefix("/a/").split("/")
+            return self.handle_request_asciinema(id_, req.hash)
+        return self.handle_request_ytdl(req)
+
+    def handle_request_ytdl(self, req: UfysRequest) -> UfysResponse | UfysError:
         info = self.ytdl_raw.extract_info(req.url, download=False)
         type_ = info.get("_type", "video")
         if type_ == "video":
@@ -138,7 +149,7 @@ class Worker:
                 return self.handle_direct_url(direct_url, info)
             if orig_url := entries[0].get("original_url"):
                 req.url = orig_url
-                return self.handle_request(req)
+                return self.handle_request_ytdl(req)
             return UfysError("unknown-playlist", message="playlist detected, but unable to process")
         return UfysError(code="unknown-type", message="unknown media type")
 
@@ -159,7 +170,7 @@ class Worker:
             if not (direct_url := info.get("url")):
                 raise yt_dlp.utils.DownloadError("extractor returned no url")
         except yt_dlp.utils.DownloadError:
-            return self.reupload(req.url, req.hash)
+            return self.reupload_ytdl(req.url, req.hash)
         return self.handle_direct_url(direct_url, info)
 
     @telemetry.trace_function
@@ -174,8 +185,7 @@ class Worker:
             height=height
         )
 
-    @telemetry.trace_function
-    def reupload(self, url: str, hash_: str):
+    def reupload_ytdl(self, url: str, hash_: str):
         # TODO size limit - pass in via request param? (support for external overrides)
         if self.minio is None:
             raise MinioNotConnected()
@@ -185,18 +195,37 @@ class Worker:
             downloads = info.get("requested_downloads", [])
             assert len(downloads) == 1
             path = pathlib.Path(downloads[0]["filepath"])
-            mime, _ = mimetypes.guess_type(path)
-            result = self.minio.fput_object(
-                bucket_name=self.config.MINIO_BUCKET,
-                object_name=hash_ + path.suffix,
-                file_path=str(path),
-                content_type=mime
+            width = downloads[0].get("width")
+            height = downloads[0].get("height")
+            location = self.reupload(path, hash_)
+            return self.make_reupload_response(
+                path=path,
+                location=location,
+                meta=self.meta_from_info(info),
+                dim=(width, height)
             )
-            if not (width := downloads[0].get("width")) or not (height := downloads[0].get("height")):
-                width, height = self.find_dimensions_from_file(path)
-        location = result.location or self.get_location(result.object_name)
+
+    @telemetry.trace_function
+    def reupload(self, path: pathlib.Path, hash_: str):
+        mime, _ = mimetypes.guess_type(path)
+        result = self.minio.fput_object(
+            bucket_name=self.config.MINIO_BUCKET,
+            object_name=hash_ + path.suffix,
+            file_path=str(path),
+            content_type=mime
+        )
+        return result.location or self.get_location(result.object_name)
+
+    def make_reupload_response(
+        self, path: pathlib.Path, location: str, meta: dict | None, dim: tuple | None
+    ) -> UfysResponse:
+        width = height = None
+        if dim is not None:
+            width, height = dim
+        if width is None or height is None:
+            width, height = self.find_dimensions_from_file(path)
         return UfysResponse(
-            **self.meta_from_info(info),
+            **meta or {},
             video_url=location,
             width=width,
             height=height,
@@ -225,3 +254,49 @@ class Worker:
         streams = ffmpeg.probe(path, select_streams="v").get("streams", [])
         assert len(streams) == 1
         return streams[0].get("width"), streams[0].get("height")
+
+    @telemetry.trace_function
+    def to_mp4(self, source: pathlib.Path, dest: pathlib.Path):
+        ffmpeg.input(str(source)).output(str(dest)).run()
+
+    @telemetry.trace_function
+    def handle_request_asciinema(self, id_, hash_) -> UfysResponse | UfysError:
+        if self.config.AAAS_ENDPOINT is None:
+            return UfysError(code="config-error", message="AAAS_ENDPOINT not set")
+        r = requests.get(f"https://asciinema.org/a/{id_}.cast?dl=1")
+        r.raise_for_status()
+        r = requests.post(self.config.AAAS_ENDPOINT, data=r.content)
+        r.raise_for_status()
+        with TemporaryDirectory() as _tmp:
+            gif = pathlib.Path(_tmp) / "render.gif"
+            mp4 = pathlib.Path(_tmp) / "render.mp4"
+            with open(gif, "wb") as file:
+                file.write(r.content)
+            self.to_mp4(source=gif, dest=mp4)
+            location = self.reupload(mp4, hash_)
+            return self.make_reupload_response(
+                path=mp4,
+                location=location,
+                dim=None,
+                meta=dict(
+                    **self.asciinema_get_metadata(id_=id_),
+                    site="asciinema"
+                )
+            )
+
+    @telemetry.trace_function
+    def asciinema_get_metadata(self, id_):
+        # TODO marie is looking into an api for this
+        r = requests.get(f"https://asciinema.org/a/{id_}")
+        r.raise_for_status()
+        soup = BeautifulSoup(r.content, "html.parser")
+        title = soup.find("meta", dict(property="og:title")).attrs.get("content")
+        user_href = soup.find("span", {"class": "author-avatar"}).find("a").attrs.get("href")
+        r = requests.get(f"https://asciinema.org{user_href}")
+        r.raise_for_status()
+        soup = BeautifulSoup(r.content, "html.parser")
+        user_string = soup.find("h1").find(string=True, recursive=False).get_text().strip()
+        return dict(
+            title=title,
+            creator=user_string,
+        )
