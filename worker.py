@@ -257,7 +257,18 @@ class Worker:
 
     @telemetry.trace_function
     def to_mp4(self, source: pathlib.Path, dest: pathlib.Path):
-        ffmpeg.input(str(source)).output(str(dest)).run()
+        ffmpeg.input(
+            str(source),
+            vsync="0"
+        ).filter_(
+            "scale",
+            "trunc(iw/2)*2",
+            "trunc(ih/2)*2"
+        ).output(
+            str(dest),
+            pix_fmt="yuv420p",
+            movflags="faststart"
+        ).run()
 
     @telemetry.trace_function
     def handle_request_asciinema(self, id_, hash_) -> UfysResponse | UfysError:
