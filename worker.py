@@ -1,4 +1,5 @@
 import dataclasses
+import json
 import mimetypes
 import os
 import pathlib
@@ -34,6 +35,7 @@ class ConfigStore:
     MINIO_BUCKET: str = None
     MINIO_SECURE: bool = True
     AAAS_ENDPOINT: str = None
+    PROXY_URL: str = None
 
     @classmethod
     def from_env(cls):
@@ -134,6 +136,8 @@ class Worker:
         if parts.hostname == "asciinema.org":
             id_, = parts.path.removeprefix("/a/").split("/")
             return self.handle_request_asciinema(id_, req.hash)
+        if parts.hostname in ["instagram.com", "www.instagram.com"]:
+            return self.handle_request_instagram(req)
         return self.handle_request_ytdl(req)
 
     def handle_request_ytdl(self, req: UfysRequest) -> UfysResponse | UfysError:
@@ -310,4 +314,25 @@ class Worker:
         return dict(
             title=title,
             creator=user_string,
+        )
+
+    def handle_request_instagram(self, req: UfysRequest) -> UfysResponse:
+        # TODO error handling error handling error handling
+        r = requests.get(req.url, proxies=dict(http=self.config.PROXY_URL, https=self.config.PROXY_URL))
+        r.raise_for_status()
+        soup = BeautifulSoup(r.content, "html.parser")
+        data: list = json.loads(soup.find("script", dict(type="application/ld+json")).get_text())
+        social_media_posting = next(x for x in data if x.get("@type") == "SocialMediaPosting")
+        video, *_ = social_media_posting.get("video")
+        author = social_media_posting.get("author")
+        author_str = f"{author.get('name')} ({author.get('alternateName')})"
+        title, *_ = video.get("caption").split("\n")
+
+        return UfysResponse(
+            title=title,
+            creator=author_str,
+            site="Instagram",
+            video_url=video.get("contentUrl"),
+            width=int(video.get("width")),
+            height=int(video.get("height"))
         )
