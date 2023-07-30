@@ -13,6 +13,7 @@ COPY requirements.txt .
 RUN pip install -r requirements.txt gunicorn
 
 COPY *.py ./
+COPY handlers handlers
 
 EXPOSE 80
 
