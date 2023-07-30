@@ -2,5 +2,22 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "config:base"
+  ],
+  "packageRules": [
+    {
+      "excludePackageNames": [
+        "yt-dlp"
+      ],
+      "matchUpdateTypes": [
+        "patch"
+      ],
+      "enabled": false
+    },
+    {
+      "matchPackagePrefixes": [
+        "opentelemetry"
+      ],
+      "groupName": "opentelemetry"
+    }
   ]
 }
