@@ -1,6 +1,7 @@
 import json
 
 from bs4 import BeautifulSoup
+from opentelemetry import trace
 
 from handlers.base import RequestHandler
 from model import UfysRequest, UfysResponse
@@ -12,6 +13,13 @@ class InstagramRequestHandler(RequestHandler):
     def handle_request(self, req: UfysRequest) -> UfysResponse:
         # TODO error handling error handling error handling
         r = self.session.get(req.url, proxies=dict(http=self.config.PROXY_URL, https=self.config.PROXY_URL))
+        trace.get_current_span().add_event(
+            "downloaded-html",
+            dict(
+                content=r.content,
+                status_code=r.status_code
+            )
+        )
         r.raise_for_status()
         soup = BeautifulSoup(r.content, "html.parser")
         data: list = json.loads(soup.find("script", dict(type="application/ld+json")).get_text())
