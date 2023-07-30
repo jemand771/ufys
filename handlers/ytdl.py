@@ -3,7 +3,8 @@ import re
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from yt_dlp import DownloadError, YoutubeDL
+from yt_dlp import YoutubeDL
+from yt_dlp.utils import DownloadError
 
 import telemetry
 import util
