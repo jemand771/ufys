@@ -39,7 +39,7 @@ def trace_function(func):
         arg_attrs = {
             key: value
             for key, value
-            in zip(func.__code__.co.varnames, args)
+            in zip(func.__code__.co_varnames, args)
         }
         with opentelemetry.trace.get_tracer(__name__).start_as_current_span(
             func.__name__,
