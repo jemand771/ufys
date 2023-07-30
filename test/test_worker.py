@@ -12,11 +12,11 @@ class TestWorker(unittest.TestCase):
     def test_direct_extraction(self):
         wk = worker.Worker()
         resp = wk.handle_request(UfysRequest(url=constants.video_direct_linkable))
-        self.assertEqual(resp.creator, "zentonte")
-        self.assertEqual(resp.title, "#palinka ")
-        self.assertEqual(resp.reuploaded, False)
-        self.assertEqual(resp.width, 576)
-        self.assertEqual(resp.height, 1024)
+        self.assertEqual("jackmanifoldtv", resp.creator)
+        self.assertEqual("#duet with @Juney  am i doing it right?", resp.title)
+        self.assertEqual(False, resp.reuploaded)
+        self.assertEqual(1216, resp.width)
+        self.assertEqual(1080, resp.height)
         r = requests.get(resp.video_url)
         r.raise_for_status()
 
