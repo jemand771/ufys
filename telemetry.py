@@ -36,9 +36,14 @@ def init():
 def trace_function(func):
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
+        arg_attrs = {
+            key: value
+            for key, value
+            in zip(func.__code__.co.varnames, args)
+        }
         with opentelemetry.trace.get_tracer(__name__).start_as_current_span(
             func.__name__,
-            attributes=kwargs
+            attributes=arg_attrs | kwargs
         ):
             return func(*args, **kwargs)
 
