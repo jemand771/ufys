@@ -18,14 +18,14 @@ class UfysRequest:
 
 
 @dataclass
-class UfysResponseVideoMetadata:
+class UfysResponseMetadata:
     title: str | None
     creator: str | None
     site: str | None
 
 
 @dataclass
-class UfysResponse(UfysResponseVideoMetadata):
+class UfysResponse(UfysResponseMetadata):
     video_url: str
     width: int
     height: int
@@ -33,7 +33,7 @@ class UfysResponse(UfysResponseVideoMetadata):
 
 
 @dataclass
-class UfysError:
+class UfysError(Exception):
     code: str
     message: str = ""
 
