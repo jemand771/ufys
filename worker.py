@@ -1,4 +1,6 @@
+import functools
 import mimetypes
+import multiprocessing.pool
 import pathlib
 
 # noinspection PyPackageRequirements
@@ -11,6 +13,7 @@ from urllib3.exceptions import MaxRetryError
 import telemetry
 from config import ConfigStore
 from handlers.asciinema import AsciinemaRequestHandler
+from handlers.base import RequestHandler
 from handlers.instagram import InstagramRequestHandler
 from handlers.ytdl import YTDLRequestHandler
 from model import MinioNotConnected, UfysError, UfysRequest, UfysResponse
@@ -26,7 +29,7 @@ class Worker:
             class_(self) for class_ in [
                 InstagramRequestHandler,
                 AsciinemaRequestHandler,
-                YTDLRequestHandler
+                YTDLRequestHandler,
             ]
         ]
         try:
@@ -66,33 +69,31 @@ class Worker:
     @telemetry.trace_function
     def handle_request(self, req: UfysRequest) -> list[UfysResponse | UfysError]:
 
-        results: list[UfysResponse] = []
-        errors: list[UfysError] = []
-        for handler in self.handlers:
-            # TODO parallelize
+        handlers_to_run = [handler for handler in self.handlers if handler.can_handle(req)]
+        if not handlers_to_run:
+            return [UfysError(code="no-handler", message="could not find a suitable handler for this request")]
+
+        with multiprocessing.pool.ThreadPool(len(handlers_to_run)) as pool:
+            results = pool.map(functools.partial(self.dispatch_handler, req=req), handlers_to_run)
+
+        successful_results = [result for result in results if isinstance(result, UfysResponse)]
+        return successful_results or results
+
+    @staticmethod
+    def dispatch_handler(handler: RequestHandler, req: UfysRequest) -> UfysResponse | UfysError:
+        try:
             # TODO automatic retries
-            if not handler.can_handle(req):
-                continue
-            try:
-                results.append(handler.handle_request(req))
-            except UfysError as e:
-                errors.append(e)
-            # TODO should be part of ytdlhandler
-            except yt_dlp.utils.DownloadError:
-                errors.append(UfysError(code="download-error", message="yt-dlp failed to download this video"))
-            except AssertionError:
-                errors.append(
-                    UfysError(
-                        code="assertion-error",
-                        message="an unknown error, thought to be impossible, has occured"
-                    )
-                )
-        if not results:
-            if errors:
-                return errors
-            else:
-                return [UfysError(code="no-handler", message="could not find a suitable handler for this request")]
-        return results
+            return handler.handle_request(req)
+        except UfysError as e:
+            return e
+        # TODO should be part of ytdlhandler
+        except yt_dlp.utils.DownloadError:
+            return UfysError(code="download-error", message="yt-dlp failed to download this video")
+        except AssertionError:
+            return UfysError(
+                code="assertion-error",
+                message="an unknown error, thought to be impossible, has occured"
+            )
 
     @telemetry.trace_function
     def reupload(self, path: pathlib.Path, hash_: str):
