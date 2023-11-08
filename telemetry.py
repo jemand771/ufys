@@ -52,8 +52,13 @@ def flatten_attributes(attributes: dict) -> dict[str, typing.Any]:
             continue
         if dataclasses.is_dataclass(value):
             results.update(prefix_dict(key, flatten_attributes(dataclasses.asdict(value))))
-
-        results[key] = value
+            continue
+        if isinstance(value, dict):
+            results.update(prefix_dict(key, flatten_attributes(value)))
+            continue
+        if isinstance(value, list):
+            results.update(prefix_dict(key, flatten_attributes(dict(enumerate(value)))))
+            continue
     return results
 
 
