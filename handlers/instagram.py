@@ -4,7 +4,7 @@ from bs4 import BeautifulSoup
 from opentelemetry import trace
 
 from handlers.base import RequestHandler
-from model import UfysRequest, UfysResponse
+from model import UfysError, UfysRequest, UfysResponse
 
 
 class InstagramRequestHandler(RequestHandler):
@@ -22,7 +22,10 @@ class InstagramRequestHandler(RequestHandler):
         )
         r.raise_for_status()
         soup = BeautifulSoup(r.content, "html.parser")
-        data: list = json.loads(soup.find("script", dict(type="application/ld+json")).get_text())
+        data_element = soup.find("script", dict(type="application/ld+json"))
+        if not data_element:
+            raise UfysError(code="no-data-element", message="instagram didn't send a video data element")
+        data: list = json.loads(data_element.get_text())
         social_media_posting = next(x for x in data if x.get("@type") == "SocialMediaPosting")
         video, *_ = social_media_posting.get("video")
         author = social_media_posting.get("author")
