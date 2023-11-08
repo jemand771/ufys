@@ -94,6 +94,11 @@ class Worker:
                 code="assertion-error",
                 message="an unknown error, thought to be impossible, has occured"
             )
+        except Exception as ex:
+            return UfysError(
+                code="implementation-error",
+                message=f"handler crashed; this is probably an implementation issue ({str(ex)})"
+            )
 
     @telemetry.trace_function
     def reupload(self, path: pathlib.Path, hash_: str):
