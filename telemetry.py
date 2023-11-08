@@ -9,8 +9,6 @@ from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
-from worker import Worker
-
 
 def get_endpoint():
     # test value for debugging with local tunnel:
@@ -47,6 +45,8 @@ def prefix_dict(prefix: str, dict_: dict[str, typing.Any]) -> dict[str, typing.A
 
 def flatten_attributes(attributes: dict) -> dict[str, typing.Any]:
     results = {}
+    # importing here to prevent circular dependency
+    from worker import Worker
     for key, value in attributes.items():
         if isinstance(value, Worker):
             continue
