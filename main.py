@@ -14,7 +14,7 @@ from model import MinioNotConnected, UfysError, UfysRequest, UfysResponse
 APP = Flask(__name__)
 WORKER = worker.Worker(worker.ConfigStore.from_env())
 
-telemetry.init()
+telemetry.init(service_name="embed-works.ufys")
 FlaskInstrumentor().instrument_app(APP)
 RequestsInstrumentor().instrument()
 

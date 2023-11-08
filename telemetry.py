@@ -16,14 +16,14 @@ def get_endpoint():
     return os.environ.get("OTEL_ENDPOINT")
 
 
-def init():
+def init(service_name: str):
     if (endpoint := get_endpoint()) is None:
         print("skipping trace initialization")
         return
     tracer = TracerProvider(
         resource=Resource(
             attributes={
-                "service.name": "embed-works.ufys"
+                "service.name": service_name
             }
         )
     )
