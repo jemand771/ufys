@@ -67,7 +67,7 @@ def trace_function(func):
         }
         with opentelemetry.trace.get_tracer(__name__).start_as_current_span(
             func.__name__,
-            attributes=arg_attrs | kwargs
+            attributes=flatten_attributes(arg_attrs | kwargs)
         ):
             return func(*args, **kwargs)
 
