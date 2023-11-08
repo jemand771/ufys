@@ -1,7 +1,6 @@
 import dataclasses
-from json import JSONEncoder
 
-import yt_dlp
+import flask.json.provider
 from flask import Flask, request
 from flask.json import jsonify
 from opentelemetry.instrumentation.flask import FlaskInstrumentor
@@ -10,7 +9,7 @@ from opentelemetry.instrumentation.requests import RequestsInstrumentor
 import telemetry
 import util
 import worker
-from model import MinioNotConnected, UfysError, UfysRequest
+from model import MinioNotConnected, UfysError, UfysRequest, UfysResponse
 
 APP = Flask(__name__)
 WORKER = worker.Worker(worker.ConfigStore.from_env())
@@ -20,36 +19,45 @@ FlaskInstrumentor().instrument_app(APP)
 RequestsInstrumentor().instrument()
 
 
-class ResponseEncoder(JSONEncoder):
-    def default(self, o):
-        if dataclasses.is_dataclass(o):
-            return dataclasses.asdict(o)
-        return super().default(o)
+class CustomJsonProvider(flask.json.provider.DefaultJSONProvider):
+    def dumps(self, o, **kwargs):
+        if not isinstance(o, list) or not all(dataclasses.is_dataclass(c) for c in o):
+            return super().dumps(o, **kwargs)
+        return super().dumps(
+            [
+                dataclasses.asdict(c) | dict(_class=c.__class__.__name__)
+                for c in o
+            ], **kwargs
+        )
 
 
-APP.json_provider_class = ResponseEncoder
+APP.json = CustomJsonProvider(APP)
 
 
 @APP.post("/video")
 def get_video_url():
     req = util.dataclass_from_dict(UfysRequest, request.json)
     resp = WORKER.handle_request(req)
-    return jsonify(resp)
+    assert resp
+    success = any(isinstance(c, UfysResponse) for c in resp)
+    return jsonify(resp), 200 if success else 500
 
 
 @APP.errorhandler(AssertionError)
 def handle_assertionerror(ex):
-    return jsonify(UfysError(code="unknown-error")), 500
-
-
-@APP.errorhandler(yt_dlp.utils.DownloadError)
-def handle_downloaderror(ex):
-    return jsonify(UfysError(code="download-error")), 500
+    return jsonify(
+        [
+            UfysError(
+                code="assertion-error",
+                message="an unknown error, thought to be impossible, has occured"
+            )
+        ]
+    ), 500
 
 
 @APP.errorhandler(MinioNotConnected)
 def handle_minio_not_connected(ex):
-    return jsonify(UfysError(code="minio-error")), 500
+    return jsonify([UfysError(code="minio-error", message="an internal backend service is unavailable")]), 500
 
 
 if __name__ == '__main__':

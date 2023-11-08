@@ -5,6 +5,7 @@ import pathlib
 import minio
 import minio.commonconfig
 import minio.lifecycleconfig
+import yt_dlp
 from urllib3.exceptions import MaxRetryError
 
 import telemetry
@@ -63,22 +64,35 @@ class Worker:
         # try to extract using custom format extractor
 
     @telemetry.trace_function
-    def handle_request(self, req: UfysRequest) -> UfysResponse:
+    def handle_request(self, req: UfysRequest) -> list[UfysResponse | UfysError]:
 
-        error = UfysError(code="no-handler", message="could not find a suitable handler for this request")
+        results: list[UfysResponse] = []
+        errors: list[UfysError] = []
         for handler in self.handlers:
             # TODO parallelize
             # TODO automatic retries
             if not handler.can_handle(req):
                 continue
             try:
-                return handler.handle_request(req)
+                results.append(handler.handle_request(req))
             except UfysError as e:
-                # TODO error fatality levels / aggregation
-                # this is probably not accurate if more than one handler has failed
-                error = e
-                continue
-        raise error
+                errors.append(e)
+            # TODO should be part of ytdlhandler
+            except yt_dlp.utils.DownloadError:
+                errors.append(UfysError(code="download-error", message="yt-dlp failed to download this video"))
+            except AssertionError:
+                errors.append(
+                    UfysError(
+                        code="assertion-error",
+                        message="an unknown error, thought to be impossible, has occured"
+                    )
+                )
+        if not results:
+            if errors:
+                return errors
+            else:
+                return [UfysError(code="no-handler", message="could not find a suitable handler for this request")]
+        return results
 
     @telemetry.trace_function
     def reupload(self, path: pathlib.Path, hash_: str):
