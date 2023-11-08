@@ -1,11 +1,15 @@
+import dataclasses
 import functools
 import os
+import typing
 
 import opentelemetry.trace
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
+
+from worker import Worker
 
 
 def get_endpoint():
@@ -31,6 +35,26 @@ def init():
             OTLPSpanExporter(endpoint=endpoint)
         )
     )
+
+
+def prefix_dict(prefix: str, dict_: dict[str, typing.Any]) -> dict[str, typing.Any]:
+    return {
+        f"{prefix}.{key}": value
+        for key, value
+        in dict_.items()
+    }
+
+
+def flatten_attributes(attributes: dict) -> dict[str, typing.Any]:
+    results = {}
+    for key, value in attributes.items():
+        if isinstance(value, Worker):
+            continue
+        if dataclasses.is_dataclass(value):
+            results.update(prefix_dict(key, flatten_attributes(dataclasses.asdict(value))))
+
+        results[key] = value
+    return results
 
 
 def trace_function(func):
