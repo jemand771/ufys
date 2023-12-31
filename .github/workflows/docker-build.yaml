@@ -23,6 +23,8 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: 3.11
+      - name: Update package lists
+        run: sudo apt-get update
       - name: Install ffmpeg
         run: sudo apt-get install -y --no-install-recommends ffmpeg
       - name: Install dependencies
