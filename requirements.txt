@@ -7,4 +7,4 @@ opentelemetry-exporter-otlp==1.18.0
 opentelemetry-instrumentation-flask==0.39b0
 opentelemetry-instrumentation-requests==0.39b0
 requests[socks]==2.31.0
-yt-dlp==2023.12.30
+yt-dlp==2024.3.10
