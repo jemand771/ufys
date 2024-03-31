@@ -6,16 +6,6 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    services:
-      minio:
-        # bitnami image because github actions doesn't support passing a command (`server /data`)
-        image: bitnami/minio
-        ports:
-          - 9080:9000
-        env:
-          MINIO_DEFAULT_BUCKETS: test
-          MINIO_ROOT_USER: minioadmin
-          MINIO_ROOT_PASSWORD: minioadmin
     steps:
       - name: Checkout
         uses: actions/checkout@v4
