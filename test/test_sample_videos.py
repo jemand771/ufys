@@ -1,3 +1,4 @@
+import os
 import unittest
 import yt_dlp.utils
 
@@ -15,6 +16,8 @@ class TestSampleVideos(unittest.TestCase):
                 constants.video_needs_reupload,
         ):
             with self.subTest(url):
+                if url == constants.video_needs_reupload and os.environ.get("GITHUB_ACTIONS"):
+                    self.skipTest("github actions is banned from reddit")
                 result = self.ytdl.extract_info(url, download=False)
                 self.assertIsInstance(result, dict)
 

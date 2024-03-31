@@ -1,3 +1,4 @@
+import os
 import time
 
 import docker
@@ -66,6 +67,7 @@ class TestWorker(unittest.TestCase):
         r = requests.get(video.video_url)
         r.raise_for_status()
 
+    @unittest.skipIf(os.environ.get("GITHUB_ACTIONS"), "github actions is banned from reddit")
     def test_minio_reupload(self):
         self.worker.handle_request(UfysRequest(url=constants.video_needs_reupload))
         objects = self.worker.minio.list_objects(self.worker.config.MINIO_BUCKET)
