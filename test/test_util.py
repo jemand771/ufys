@@ -4,7 +4,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from .. import util
+import util
 
 
 class TestChdirDecorator(unittest.TestCase):

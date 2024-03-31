@@ -1,10 +1,9 @@
+import requests
 import unittest
 
-import requests
-
-from . import constants
-from .. import worker
-from ..model import UfysRequest
+import constants
+import worker
+from model import UfysRequest
 
 
 class TestWorker(unittest.TestCase):

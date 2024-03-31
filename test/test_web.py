@@ -1,6 +1,6 @@
 import unittest
 
-from .. import main
+import main
 
 
 class TestWeb(unittest.TestCase):
