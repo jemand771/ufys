@@ -7,5 +7,5 @@ opentelemetry-sdk==1.18.0
 opentelemetry-exporter-otlp==1.18.0
 opentelemetry-instrumentation-flask==0.39b0
 opentelemetry-instrumentation-requests==0.39b0
-requests[socks]==2.31.0
+requests[socks]==2.32.3
 yt-dlp==2024.5.5.232701.dev0
