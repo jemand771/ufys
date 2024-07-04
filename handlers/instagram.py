@@ -1,42 +1,31 @@
-import json
-
-from bs4 import BeautifulSoup
-from opentelemetry import trace
-
 from handlers.base import RequestHandler
-from model import UfysError, UfysRequest, UfysResponse
+from model import UfysRequest, UfysResponse
 
 
 class InstagramRequestHandler(RequestHandler):
     hostnames = ["instagram.com", "www.instagram.com"]
 
     def handle_request(self, req: UfysRequest) -> UfysResponse:
-        # TODO error handling error handling error handling
-        r = self.session.get(req.url, proxies=dict(http=self.config.PROXY_URL, https=self.config.PROXY_URL))
-        trace.get_current_span().add_event(
-            "downloaded-html",
-            dict(
-                content=r.content,
-                status_code=r.status_code
-            )
+        r = self.session.get("https://i.instagram.com/api/v1/oembed/", params=dict(
+            url=req.url
+        ))
+        r.raise_for_status()
+        meta = r.json()
+
+        r = self.session.post(
+            "https://api.cobalt.tools/api/json",
+            json=dict(url=req.url),
+            headers=dict(Accept="application/json")
         )
         r.raise_for_status()
-        soup = BeautifulSoup(r.content, "html.parser")
-        data_element = soup.find("script", dict(type="application/ld+json"))
-        if not data_element:
-            raise UfysError(code="no-data-element", message="instagram didn't send a video data element")
-        data: list = json.loads(data_element.get_text())
-        social_media_posting = next(x for x in data if x.get("@type") == "SocialMediaPosting")
-        video, *_ = social_media_posting.get("video")
-        author = social_media_posting.get("author")
-        author_str = f"{author.get('name')} ({author.get('alternateName')})"
-        title, *_ = video.get("caption").split("\n")
+        video_url = r.json()["url"]
+        width, height = self.find_dimensions_from_url(video_url)
 
         return UfysResponse(
-            title=title,
-            creator=author_str,
+            title=meta["title"],
+            creator=meta["author_name"],
             site="Instagram",
-            video_url=video.get("contentUrl"),
-            width=int(video.get("width")),
-            height=int(video.get("height"))
+            video_url=video_url,
+            width=width,
+            height=height
         )
